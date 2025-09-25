@@ -5,8 +5,7 @@ const logEl = document.getElementById('log')
 const aspectEl = document.getElementById('aspect')
 const formatEl = document.getElementById('format')
 const bgEl = document.getElementById('bgcolor')
-const canvas = document.getElementById('hiddenCanvas')
-const ctx = canvas.getContext('2d')
+const sharedCanvas = document.getElementById('hiddenCanvas')
 
 function log(msg){
   const p = document.createElement('div')
@@ -19,78 +18,6 @@ function clearLog(){ logEl.innerHTML = '' }
 function parseAspect(aspectStr){
   const [w,h] = aspectStr.split('/').map(Number)
   return {w,h}
-}
-
-function resizeAndCanvas(image, targetW, targetH, background){
-  // create target canvas size
-  canvas.width = targetW
-  canvas.height = targetH
-
-  // fill background
-  ctx.fillStyle = background
-  ctx.fillRect(0,0,canvas.width,canvas.height)
-
-  // compute scaled dimensions preserving aspect ratio
-  const ratio = Math.min(targetW / image.width, targetH / image.height)
-  const drawW = Math.round(image.width * ratio)
-  const drawH = Math.round(image.height * ratio)
-  const offsetX = Math.round((targetW - drawW) / 2)
-  const offsetY = Math.round((targetH - drawH) / 2)
-
-  ctx.drawImage(image, 0,0, image.width, image.height, offsetX, offsetY, drawW, drawH)
-}
-
-async function processFile(file, aspect, outputFormat, background, suffix){
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file)
-    const img = new Image()
-    img.onload = () => {
-      try{
-        // decide target pixel dimensions. We'll pick a reasonable max width based on orientation.
-        // Keep target size within 2000px to avoid huge images on mobile.
-        const maxLong = 2000
-        const targetRatio = aspect.w / aspect.h
-        // portrait: height > width
-        const targetH = Math.min(maxLong, Math.max(800, Math.round(Math.max(img.width, img.height))))
-        const targetW = Math.round(targetH * targetRatio)
-
-        // If ratio calculation makes width larger than maxLong, clamp
-        if(Math.max(targetW, targetH) > maxLong){
-          if(targetW > targetH){
-            const scale = maxLong / targetW
-            canvas.width = Math.round(targetW * scale)
-            canvas.height = Math.round(targetH * scale)
-          } else {
-            const scale = maxLong / targetH
-            canvas.width = Math.round(targetW * scale)
-            canvas.height = Math.round(targetH * scale)
-          }
-        }
-
-        // For stable behavior compute precise target dimensions from aspect and a fixed long side.
-        // We'll set finalHeight = 2000 (or smaller if original small) and compute width by ratio.
-        const finalHeight = Math.min(maxLong, Math.max(1000, Math.round(img.height)))
-        const finalWidth = Math.round(finalHeight * (aspect.w / aspect.h))
-
-        resizeAndCanvas(img, finalWidth, finalHeight, background)
-
-        canvas.toBlob((blob) => {
-          if(!blob){
-            reject(new Error('Export failed'))
-            return
-          }
-          const outName = makeOutputName(file.name, suffix, outputFormat)
-          triggerDownload(blob, outName)
-          URL.revokeObjectURL(url)
-          resolve(outName)
-        }, outputFormat, outputFormat === 'image/jpeg' ? 0.92 : undefined)
-      }catch(err){
-        reject(err)
-      }
-    }
-    img.onerror = (e) => reject(new Error('Image load error'))
-    img.src = url
-  })
 }
 
 function makeOutputName(original, suffix, format){
@@ -108,6 +35,76 @@ function triggerDownload(blob, filename){
   a.click()
   a.remove()
   setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+}
+
+// Process a file: load into an Image, create a temporary canvas sized for the target aspect,
+// draw the scaled image centered on the background, then export.
+async function processFile(file, aspect, outputFormat, background, suffix){
+  const url = URL.createObjectURL(file)
+  try{
+    const img = await loadImage(url)
+
+    // Determine final dimensions. Use a reasonable max size to avoid huge exports.
+    const maxLong = 2000
+    // Use portrait (height) as the long side by default for portrait aspect ratios
+    const aspectRatio = aspect.w / aspect.h
+
+    // Start from the image's natural sizes but clamp to maxLong
+    const nativeLong = Math.max(img.width, img.height)
+    const longSide = Math.min(maxLong, Math.max(1000, nativeLong))
+
+    // For the chosen aspect, compute target width/height where height is the long side
+    // This gives a portrait-oriented canvas when aspectRatio < 1 (e.g. 4/5)
+    const targetHeight = Math.round(longSide)
+    const targetWidth = Math.round(targetHeight * aspectRatio)
+
+    // Create an offscreen canvas per file to avoid shared state issues
+    const canvas = document.createElement('canvas')
+    canvas.width = targetWidth
+    canvas.height = targetHeight
+    const ctx = canvas.getContext('2d')
+
+    // Fill background
+    ctx.fillStyle = background
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+    // Compute scaled image size preserving aspect ratio
+    const ratio = Math.min(canvas.width / img.width, canvas.height / img.height)
+    const drawW = Math.round(img.width * ratio)
+    const drawH = Math.round(img.height * ratio)
+    const offsetX = Math.round((canvas.width - drawW) / 2)
+    const offsetY = Math.round((canvas.height - drawH) / 2)
+
+    ctx.drawImage(img, 0, 0, img.width, img.height, offsetX, offsetY, drawW, drawH)
+
+    // Export
+    const blob = await canvasToBlob(canvas, outputFormat)
+    const outName = makeOutputName(file.name, suffix, outputFormat)
+    triggerDownload(blob, outName)
+    return outName
+  }finally{
+    URL.revokeObjectURL(url)
+  }
+}
+
+function loadImage(url){
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = (e) => reject(new Error('Image load error'))
+    img.src = url
+  })
+}
+
+function canvasToBlob(canvas, type){
+  return new Promise((resolve) => {
+    // default quality used by browser when undefined is fine; supply for jpeg
+    if(type === 'image/jpeg'){
+      canvas.toBlob((b) => resolve(b), type, 0.92)
+    } else {
+      canvas.toBlob((b) => resolve(b), type)
+    }
+  })
 }
 
 convertBtn.addEventListener('click', async () => {
