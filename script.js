@@ -68,14 +68,84 @@ async function processFile(file, aspect, outputFormat, background, suffix){
     ctx.fillStyle = background
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-    // Compute scaled image size preserving aspect ratio
-    const ratio = Math.min(canvas.width / img.width, canvas.height / img.height)
-    const drawW = Math.round(img.width * ratio)
-    const drawH = Math.round(img.height * ratio)
-    const offsetX = Math.round((canvas.width - drawW) / 2)
-    const offsetY = Math.round((canvas.height - drawH) / 2)
+  // Compute scaled image size preserving aspect ratio
+  const ratio = Math.min(canvas.width / img.width, canvas.height / img.height)
+  const drawW = Math.round(img.width * ratio)
+  const drawH = Math.round(img.height * ratio)
+  const offsetX = Math.round((canvas.width - drawW) / 2)
+  const offsetY = Math.round((canvas.height - drawH) / 2)
 
+    // Add subtle 3D shadows on the background along the left and right edges of the image.
+    // To keep the shadows on the background (not on the image), draw them outside the image rect
+    // and before drawing the image itself.
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
+
+
+    const shadowWidth = Math.max(16, Math.round(Math.min(40, drawW * 0.05)))
+    const leftMaxAlpha = 0.35
+    const rightMaxAlpha = 0.22
+
+    const leftX0 = Math.max(0, offsetX - shadowWidth)
+    const leftX1 = offsetX
+    const leftW = leftX1 - leftX0
+
+    // Left shadow
+    if (leftW > 0) {
+      const leftGrad = ctx.createLinearGradient(leftX1, 0, leftX0, 0)
+      leftGrad.addColorStop(0, `rgba(0,0,0,${leftMaxAlpha})`)
+      leftGrad.addColorStop(0.5, `rgba(0,0,0,${leftMaxAlpha * 0.5})`)
+      leftGrad.addColorStop(1, 'rgba(0,0,0,0)')
+      ctx.fillStyle = leftGrad
+      ctx.fillRect(leftX0, offsetY, leftW, drawH)
+    }
+    const rightX0 = offsetX + drawW
+    const rightX1 = Math.min(canvas.width, offsetX + drawW + shadowWidth)
+    const rightW = rightX1 - rightX0
+    // Right shadow
+    if (rightW > 0) {
+      const rightGrad = ctx.createLinearGradient(rightX0, 0, rightX1, 0)
+      rightGrad.addColorStop(0, `rgba(0,0,0,${rightMaxAlpha})`)
+      rightGrad.addColorStop(0.5, `rgba(0,0,0,${rightMaxAlpha * 0.5})`)
+      rightGrad.addColorStop(1, 'rgba(0,0,0,0)')
+      ctx.fillStyle = rightGrad
+      ctx.fillRect(rightX0, offsetY, rightW, drawH)
+    }
+
+    // Draw image on top
     ctx.drawImage(img, 0, 0, img.width, img.height, offsetX, offsetY, drawW, drawH)
+
+    // const shadowWidth = Math.max(8, Math.round(Math.min(40, drawW * 0.03)))
+    // const leftMaxAlpha = 0.35
+    // const rightMaxAlpha = 0.22
+
+    // // Left shadow area: from max(0, offsetX - shadowWidth) to offsetX
+    // const leftX0 = Math.max(0, offsetX - shadowWidth)
+    // const leftX1 = offsetX
+    // const leftW = leftX1 - leftX0
+    // if(leftW > 0){
+    //   const leftGrad = ctx.createLinearGradient(leftX1, 0, leftX0, 0)
+    //   leftGrad.addColorStop(0, `rgba(0,0,0,${leftMaxAlpha})`)
+    //   leftGrad.addColorStop(1, 'rgba(0,0,0,0)')
+    //   ctx.fillStyle = leftGrad
+    //   ctx.fillRect(leftX0, offsetY, leftW, drawH)
+    // }
+
+    // // Right shadow area: from offsetX + drawW to min(canvas.width, offsetX + drawW + shadowWidth)
+    // const rightX0 = offsetX + drawW
+    // const rightX1 = Math.min(canvas.width, offsetX + drawW + shadowWidth)
+    // const rightW = rightX1 - rightX0
+    // if(rightW > 0){
+    //   const rightGrad = ctx.createLinearGradient(rightX0, 0, rightX1, 0)
+    //   rightGrad.addColorStop(0, `rgba(0,0,0,${rightMaxAlpha})`)
+    //   rightGrad.addColorStop(0.6, 'rgba(0,0,0,0.06)')
+    //   rightGrad.addColorStop(1, 'rgba(255,255,255,0)')
+    //   ctx.fillStyle = rightGrad
+    //   ctx.fillRect(rightX0, offsetY, rightW, drawH)
+    // }
+
+    // // Finally draw the image on top so the shadows remain on the background only
+    // ctx.drawImage(img, 0, 0, img.width, img.height, offsetX, offsetY, drawW, drawH)
 
     // Export
     const blob = await canvasToBlob(canvas, outputFormat)
