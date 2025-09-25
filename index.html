@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Image Portrait Converter</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Image Portrait Converter</h1>
+
+      <label class="file-label">
+        Select images
+        <input id="files" type="file" accept="image/*" multiple />
+      </label>
+
+      <div class="controls">
+        <label>
+          Aspect ratio
+          <select id="aspect">
+            <option value="4/5">4:5 (Instagram post)</option>
+            <option value="1/1">1:1 (Square)</option>
+            <option value="9/16">9:16 (Story)</option>
+          </select>
+        </label>
+
+        <label>
+          Background
+          <input id="bgcolor" type="color" value="#2E2E2E" title="Background color" />
+        </label>
+
+        <label>
+          Output format
+          <select id="format">
+            <option value="image/jpeg">JPEG</option>
+            <option value="image/png">PNG</option>
+          </select>
+        </label>
+      </div>
+
+      <button id="convert">Convert</button>
+
+      <div id="log" class="log" aria-live="polite"></div>
+
+      <canvas id="hiddenCanvas" style="display:none"></canvas>
+    </main>
+
+    <script src="script.js" type="module"></script>
+  </body>
+</html>
