@@ -6,6 +6,15 @@ const aspectEl = document.getElementById('aspect')
 const formatEl = document.getElementById('format')
 const bgEl = document.getElementById('bgcolor')
 const sharedCanvas = document.getElementById('hiddenCanvas')
+// Shadow UI (may be absent if index.html hasn't been updated)
+const shadowEl = document.getElementById('shadowStrength')
+const shadowLabel = document.getElementById('shadowStrengthLabel')
+if(shadowEl && shadowLabel){
+  shadowLabel.textContent = `${shadowEl.value}%`
+  shadowEl.addEventListener('input', () => {
+    shadowLabel.textContent = `${shadowEl.value}%`
+  })
+}
 
 function log(msg){
   const p = document.createElement('div')
@@ -82,9 +91,17 @@ async function processFile(file, aspect, outputFormat, background, suffix){
     ctx.imageSmoothingQuality = 'high'
 
 
-    const shadowWidth = Math.max(16, Math.round(Math.min(40, drawW * 0.05)))
-    const leftMaxAlpha = 0.35
-    const rightMaxAlpha = 0.22
+    // Base shadow parameters (scaled by UI slider if present)
+    const baseShadowWidth = Math.max(16, Math.round(Math.min(40, drawW * 0.05)))
+    const baseLeftAlpha = 0.35
+    const baseRightAlpha = 0.22
+    const shadowMultiplier = (() => {
+      const v = Number(shadowEl && shadowEl.value)
+      return isFinite(v) && v >= 0 ? v / 100 : 1
+    })()
+    const shadowWidth = Math.max(0, Math.round(baseShadowWidth * shadowMultiplier))
+    const leftMaxAlpha = Math.max(0, Math.min(1, baseLeftAlpha * shadowMultiplier))
+    const rightMaxAlpha = Math.max(0, Math.min(1, baseRightAlpha * shadowMultiplier))
 
     const leftX0 = Math.max(0, offsetX - shadowWidth)
     const leftX1 = offsetX
